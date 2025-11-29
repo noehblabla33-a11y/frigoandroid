@@ -1,10 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="purple_200">#FFBB86FC</color>
-    <color name="purple_500">#FF6200EE</color>
-    <color name="purple_700">#FF3700B3</color>
-    <color name="teal_200">#FF03DAC5</color>
-    <color name="teal_700">#FF018786</color>
+    <!-- Couleurs principales (cohérentes avec l'app web) -->
+    <color name="purple_200">#BBDEFB</color>
+    <color name="purple_500">#667eea</color>
+    <color name="purple_700">#764ba2</color>
+    <color name="teal_200">#80CBC4</color>
+    <color name="teal_700">#00796B</color>
+
+    <!-- Couleurs système -->
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <!-- Couleurs fonctionnelles -->
+    <color name="green">#28a745</color>
+    <color name="red">#dc3545</color>
+    <color name="blue">#667eea</color>
+    <color name="orange">#ffc107</color>
+    <color name="gray">#6c757d</color>
+    <color name="light_gray">#f8f9fa</color>
+
+    <!-- Couleurs de fond -->
+    <color name="background">#F5F5F5</color>
+    <color name="surface">#FFFFFF</color>
+
+    <!-- Couleurs de texte -->
+    <color name="text_primary">#212121</color>
+    <color name="text_secondary">#757575</color>
 </resources>

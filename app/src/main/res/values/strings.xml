@@ -1,3 +1,38 @@
 <resources>
-    <string name="app_name">FrigoCourses</string>
+    <string name="app_name">Mon Frigo - Courses</string>
+
+    <!-- Général -->
+    <string name="settings">Paramètres</string>
+    <string name="synchroniser">Synchroniser</string>
+    <string name="actualiser">Actualiser</string>
+    <string name="supprimer">Supprimer</string>
+    <string name="valider">Valider</string>
+    <string name="annuler">Annuler</string>
+    <string name="enregistrer">Enregistrer</string>
+
+    <!-- Liste de courses -->
+    <string name="quantite_achetee">Qté achetée :</string>
+    <string name="empty_list">Votre liste de courses est vide</string>
+    <string name="empty_list_hint">Tirez vers le bas pour actualiser\nou planifiez des recettes sur le web</string>
+
+    <!-- Paramètres -->
+    <string name="api_url">URL de l\'API</string>
+    <string name="api_url_hint">http://192.168.1.100:5000/api/v1/</string>
+    <string name="api_key">Clé API</string>
+    <string name="api_key_hint">Entrez votre clé API</string>
+    <string name="tester_connexion">Tester la connexion</string>
+    <string name="connexion_reussie">Connexion réussie !</string>
+    <string name="connexion_echouee">Connexion échouée</string>
+
+    <!-- Messages -->
+    <string name="sync_confirmation">Synchroniser %1$d article(s) avec le serveur ?</string>
+    <string name="delete_confirmation">Retirer %1$s de la liste ?</string>
+    <string name="sync_success">%1$d article(s) synchronisé(s)</string>
+    <string name="error_loading">Erreur de chargement</string>
+    <string name="error_sync">Erreur de synchronisation</string>
+    <string name="no_items_to_sync">Aucun article à synchroniser</string>
+
+    <!-- Menu -->
+    <string name="action_refresh">Actualiser</string>
+    <string name="action_settings">Paramètres</string>
 </resources>
