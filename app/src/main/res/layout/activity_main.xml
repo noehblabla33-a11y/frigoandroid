@@ -1,31 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.coordinatorlayout.widget.CoordinatorLayout
+<LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".ui.MainActivity">
+    android:orientation="vertical">
 
-    <com.google.android.material.appbar.AppBarLayout
+    <!-- Toolbar simple -->
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar">
+        android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorPrimary"
+        android:elevation="4dp"
+        app:title="Liste de Courses"
+        app:titleTextColor="@android:color/white" />
 
-        <androidx.appcompat.widget.Toolbar
-            android:id="@+id/toolbar"
-            android:layout_width="match_parent"
-            android:layout_height="?attr/actionBarSize"
-            android:background="?attr/colorPrimary"
-            app:popupTheme="@style/ThemeOverlay.AppCompat.Light" />
-
-    </com.google.android.material.appbar.AppBarLayout>
-
+    <!-- Contenu principal -->
     <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
         android:id="@+id/swipeRefresh"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+        android:layout_height="0dp"
+        android:layout_weight="1">
 
         <androidx.core.widget.NestedScrollView
             android:layout_width="match_parent"
@@ -83,12 +79,11 @@
 
                 </com.google.android.material.card.MaterialCardView>
 
-                <!-- Liste des courses -->
+                <!-- RecyclerView pour la liste -->
                 <androidx.recyclerview.widget.RecyclerView
                     android:id="@+id/recyclerViewCourses"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    tools:listitem="@layout/item_course" />
+                    android:layout_height="wrap_content" />
 
                 <!-- Vue vide -->
                 <LinearLayout
@@ -101,29 +96,19 @@
                     android:gravity="center"
                     android:visibility="gone">
 
-                    <ImageView
-                        android:layout_width="100dp"
-                        android:layout_height="100dp"
-                        android:src="@drawable/ic_shopping_cart"
-                        android:alpha="0.3"
-                        android:contentDescription="@string/empty_list" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="🛒"
+                        android:textSize="64sp"
+                        android:layout_marginBottom="16dp"/>
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="16dp"
                         android:text="@string/empty_list"
                         android:textSize="18sp"
-                        android:textColor="@android:color/darker_gray" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:text="@string/empty_list_hint"
-                        android:textSize="14sp"
-                        android:gravity="center"
-                        android:textColor="@android:color/darker_gray" />
+                        android:gravity="center" />
 
                 </LinearLayout>
 
@@ -133,15 +118,13 @@
 
     </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
-    <!-- Bouton flottant de synchronisation -->
-    <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+    <!-- Bouton synchroniser -->
+    <com.google.android.material.button.MaterialButton
         android:id="@+id/btnSynchroniser"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom|end"
         android:layout_margin="16dp"
         android:text="@string/synchroniser"
-        app:icon="@drawable/ic_sync"
-        app:iconPadding="8dp" />
+        app:icon="@drawable/ic_sync" />
 
-</androidx.coordinatorlayout.widget.CoordinatorLayout>
+</LinearLayout>
