@@ -33,52 +33,6 @@
                 android:orientation="vertical"
                 android:padding="16dp">
 
-                <!-- Carte résumé -->
-                <com.google.android.material.card.MaterialCardView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="16dp"
-                    app:cardElevation="4dp"
-                    app:cardCornerRadius="8dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="16dp">
-
-                        <TextView
-                            android:id="@+id/tvCompteur"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="0 / 0 articles achetés"
-                            android:textSize="16sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tvTotalEstime"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="8dp"
-                            android:text="Total estimé: 0.00 €"
-                            android:textColor="@color/green"
-                            android:textSize="18sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tvTotalAchete"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="4dp"
-                            android:text="Total acheté: 0.00 €"
-                            android:textColor="@color/blue"
-                            android:textSize="16sp"
-                            android:visibility="gone" />
-
-                    </LinearLayout>
-
-                </com.google.android.material.card.MaterialCardView>
-
                 <!-- RecyclerView pour la liste -->
                 <androidx.recyclerview.widget.RecyclerView
                     android:id="@+id/recyclerViewCourses"
@@ -110,6 +64,15 @@
                         android:textSize="18sp"
                         android:gravity="center" />
 
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/empty_list_hint"
+                        android:textSize="14sp"
+                        android:textColor="@android:color/darker_gray"
+                        android:gravity="center" />
+
                 </LinearLayout>
 
             </LinearLayout>
@@ -125,6 +88,9 @@
         android:layout_height="wrap_content"
         android:layout_margin="16dp"
         android:text="@string/synchroniser"
-        app:icon="@drawable/ic_sync" />
+        android:textSize="16sp"
+        android:padding="16dp"
+        app:icon="@drawable/ic_sync"
+        app:iconSize="24dp" />
 
 </LinearLayout>
