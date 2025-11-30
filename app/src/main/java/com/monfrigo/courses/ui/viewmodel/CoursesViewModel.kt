@@ -1,5 +1,6 @@
 package com.monfrigo.courses.ui.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
@@ -13,6 +14,7 @@ import kotlinx.coroutines.launch
  */
 class CoursesViewModel : ViewModel() {
 
+    private val TAG = "CoursesViewModel"
     private val repository = CoursesRepository()
 
     // Liste des items
@@ -49,11 +51,13 @@ class CoursesViewModel : ViewModel() {
 
             repository.getCourses()
                 .onSuccess { response ->
+                    Log.d(TAG, "Courses chargées: ${response.count} items")
                     _items.value = response.items
                     _totalEstime.value = response.total_estime
                     updateCounters()
                 }
                 .onFailure { exception ->
+                    Log.e(TAG, "Erreur de chargement: ${exception.message}", exception)
                     _error.value = exception.message ?: "Erreur de chargement"
                 }
 
@@ -77,13 +81,18 @@ class CoursesViewModel : ViewModel() {
                 return@launch
             }
 
+            Log.d(TAG, "Synchronisation de ${itemsAchetes.size} articles")
+
             repository.syncCourses(itemsAchetes)
                 .onSuccess { response ->
+                    Log.d(TAG, "Sync réussie: ${response.message}")
                     _successMessage.value = response.message
-                    // Recharger la liste après synchro
+
+                    // Recharger la liste après synchro pour avoir l'état à jour
                     loadCourses()
                 }
                 .onFailure { exception ->
+                    Log.e(TAG, "Erreur de sync: ${exception.message}", exception)
                     _error.value = exception.message ?: "Erreur de synchronisation"
                 }
 
@@ -99,22 +108,46 @@ class CoursesViewModel : ViewModel() {
         val index = currentList.indexOfFirst { it.id == item.id }
 
         if (index != -1) {
-            currentList[index] = item.copy(achete = !item.achete)
+            val newAcheteState = !item.achete
+
+            // Si on coche, mettre quantite_achetee = quantite_restante par défaut
+            val newItem = if (newAcheteState) {
+                item.copy(
+                    achete = true,
+                    quantite_achetee = item.quantite_restante
+                )
+            } else {
+                // Si on décoche, remettre à l'état initial
+                item.copy(
+                    achete = false,
+                    quantite_achetee = item.quantite_restante
+                )
+            }
+
+            currentList[index] = newItem
+
+            Log.d(TAG, "Item ${item.ingredient_nom} acheté: $newAcheteState")
             _items.value = currentList
             updateCounters()
         }
     }
 
     /**
-     * Met à jour la quantité achetée
+     * Met à jour la quantité achetée ET calcule la quantité restante
      */
     fun updateQuantite(item: CourseItem, nouvelleQuantite: Double) {
         val currentList = _items.value?.toMutableList() ?: return
         val index = currentList.indexOfFirst { it.id == item.id }
 
         if (index != -1) {
-            currentList[index] = item.copy(quantite_achetee = nouvelleQuantite)
+            // Limiter la quantité achetée à la quantité restante
+            val quantiteLimitee = nouvelleQuantite.coerceAtMost(item.quantite_restante)
+
+            currentList[index] = item.copy(quantite_achetee = quantiteLimitee)
+
+            Log.d(TAG, "Quantité de ${item.ingredient_nom} mise à jour: $quantiteLimitee (restante: ${item.quantite_restante})")
             _items.value = currentList
+            updateTotalEstime()
         }
     }
 
@@ -123,6 +156,8 @@ class CoursesViewModel : ViewModel() {
      */
     fun deleteItem(item: CourseItem) {
         viewModelScope.launch {
+            Log.d(TAG, "Suppression de l'item ${item.ingredient_nom}")
+
             repository.deleteItem(item.id)
                 .onSuccess {
                     val currentList = _items.value?.toMutableList() ?: return@launch
@@ -130,8 +165,10 @@ class CoursesViewModel : ViewModel() {
                     _items.value = currentList
                     _successMessage.value = "${item.ingredient_nom} retiré de la liste"
                     updateCounters()
+                    updateTotalEstime()
                 }
                 .onFailure { exception ->
+                    Log.e(TAG, "Erreur de suppression: ${exception.message}", exception)
                     _error.value = exception.message ?: "Erreur de suppression"
                 }
         }
@@ -143,6 +180,17 @@ class CoursesViewModel : ViewModel() {
     private fun updateCounters() {
         val list = _items.value ?: emptyList()
         _itemsAchetes.value = list.count { it.achete }
+        Log.d(TAG, "Compteurs mis à jour: ${_itemsAchetes.value} / ${list.size}")
+    }
+
+    /**
+     * Recalcule le total estimé basé sur les quantités restantes
+     */
+    private fun updateTotalEstime() {
+        val list = _items.value ?: emptyList()
+        val total = list.sumOf { it.quantite_restante * it.prix_unitaire }
+        _totalEstime.value = total
+        Log.d(TAG, "Total estimé: $total €")
     }
 
     /**
@@ -165,7 +213,7 @@ class CoursesViewModel : ViewModel() {
     fun getTotalAchete(): Double {
         return _items.value
             ?.filter { it.achete }
-            ?.sumOf { it.prixTotal() }
+            ?.sumOf { it.quantite_achetee * it.prix_unitaire }
             ?: 0.0
     }
 }

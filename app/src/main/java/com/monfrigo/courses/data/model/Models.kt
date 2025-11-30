@@ -11,14 +11,15 @@ data class CourseItem(
     val id: Int,
     val ingredient_id: Int,
     val ingredient_nom: String,
-    val quantite: Double,
+    val quantite: Double,  // Quantité initialement demandée
     val unite: String,
     val prix_unitaire: Double,
     val prix_estime: Double,
     val image: String?,
     val categorie: String?,
     var achete: Boolean = false,
-    var quantite_achetee: Double = quantite
+    var quantite_achetee: Double = quantite,  // Par défaut = quantité demandée
+    var quantite_restante: Double = quantite  // Nouvelle propriété
 ) : Parcelable {
 
     /**
@@ -30,6 +31,24 @@ data class CourseItem(
         } else {
             0.0
         }
+    }
+
+    /**
+     * Met à jour la quantité restante après achat partiel
+     */
+    fun updateQuantiteRestante(quantiteAchetee: Double): CourseItem {
+        val restante = (quantite_restante - quantiteAchetee).coerceAtLeast(0.0)
+        return copy(
+            quantite_achetee = quantiteAchetee,
+            quantite_restante = restante
+        )
+    }
+
+    /**
+     * Vérifie si l'item est complètement acheté
+     */
+    fun isCompleted(): Boolean {
+        return quantite_restante <= 0.01 // Petite marge pour les erreurs de précision
     }
 }
 

@@ -7,23 +7,31 @@ import android.view.MenuItem
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.snackbar.Snackbar
 import com.monfrigo.courses.R
 import com.monfrigo.courses.databinding.ActivityMainBinding
+import com.monfrigo.courses.data.api.RetrofitClient
 import com.monfrigo.courses.ui.adapter.CoursesAdapter
 import com.monfrigo.courses.ui.viewmodel.CoursesViewModel
+import com.monfrigo.courses.utils.PreferencesManager
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var viewModel: CoursesViewModel
     private lateinit var adapter: CoursesAdapter
+    private lateinit var preferencesManager: PreferencesManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        preferencesManager = PreferencesManager(this)
 
         setupToolbar()
         setupViewModel()
@@ -32,8 +40,28 @@ class MainActivity : AppCompatActivity() {
         setupObservers()
         setupButtons()
 
-        // Charger les courses au démarrage
-        viewModel.loadCourses()
+        // Configurer l'API puis charger les courses
+        configureApiAndLoadCourses()
+    }
+
+    private fun configureApiAndLoadCourses() {
+        lifecycleScope.launch {
+            try {
+                val apiUrl = preferencesManager.getApiUrl().first()
+                val apiKey = preferencesManager.getApiKey().first()
+
+                RetrofitClient.configure(apiUrl, apiKey)
+                viewModel.loadCourses()
+            } catch (e: Exception) {
+                Snackbar.make(
+                    binding.root,
+                    "Erreur de configuration: ${e.message}",
+                    Snackbar.LENGTH_LONG
+                ).setAction("Paramètres") {
+                    startActivity(Intent(this@MainActivity, SettingsActivity::class.java))
+                }.show()
+            }
+        }
     }
 
     private fun setupToolbar() {
@@ -52,11 +80,6 @@ class MainActivity : AppCompatActivity() {
             },
             onQuantityChanged = { item, quantity ->
                 viewModel.updateQuantite(item, quantity)
-                Snackbar.make(
-                    binding.root,
-                    "Quantité mise à jour",
-                    Snackbar.LENGTH_SHORT
-                ).show()
             },
             onItemDelete = { item ->
                 showDeleteConfirmation(item)
@@ -76,7 +99,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupButtons() {
-        // Bouton synchroniser
         binding.btnSynchroniser.setOnClickListener {
             showSyncConfirmation()
         }
@@ -87,7 +109,6 @@ class MainActivity : AppCompatActivity() {
         viewModel.items.observe(this) { items ->
             adapter.submitList(items)
             updateEmptyView(items.isEmpty())
-            updateCounters()
         }
 
         // Observer le chargement
@@ -115,16 +136,6 @@ class MainActivity : AppCompatActivity() {
                 viewModel.clearSuccessMessage()
             }
         }
-
-        // Observer le total estimé
-        viewModel.totalEstime.observe(this) { total ->
-            binding.tvTotalEstime.text = String.format("Total estimé: %.2f €", total)
-        }
-
-        // Observer les items achetés
-        viewModel.itemsAchetes.observe(this) { count ->
-            updateCounters()
-        }
     }
 
     private fun updateEmptyView(isEmpty: Boolean) {
@@ -137,36 +148,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateCounters() {
-        val totalItems = viewModel.items.value?.size ?: 0
-        val itemsAchetes = viewModel.itemsAchetes.value ?: 0
-
-        binding.tvCompteur.text = "$itemsAchetes / $totalItems articles achetés"
-
-        val totalAchete = viewModel.getTotalAchete()
-        if (totalAchete > 0) {
-            binding.tvTotalAchete.text = String.format("Total acheté: %.2f €", totalAchete)
-            binding.tvTotalAchete.visibility = android.view.View.VISIBLE
-        } else {
-            binding.tvTotalAchete.visibility = android.view.View.GONE
-        }
-    }
-
     private fun showSyncConfirmation() {
         val itemsAchetes = viewModel.items.value?.count { it.achete } ?: 0
 
         if (itemsAchetes == 0) {
             Snackbar.make(
                 binding.root,
-                "Aucun article à synchroniser",
-                Snackbar.LENGTH_SHORT
+                "Cochez les articles achetés avant de synchroniser",
+                Snackbar.LENGTH_LONG
             ).show()
             return
         }
 
         AlertDialog.Builder(this)
             .setTitle("Synchroniser les achats")
-            .setMessage("Synchroniser $itemsAchetes article(s) avec le serveur ?")
+            .setMessage("Synchroniser $itemsAchetes article(s) avec le serveur ?\n\nLe frigo sera mis à jour automatiquement.")
             .setPositiveButton("Synchroniser") { _, _ ->
                 viewModel.syncAchats()
             }
@@ -201,6 +197,16 @@ class MainActivity : AppCompatActivity() {
                 true
             }
             else -> super.onOptionsItemSelected(item)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        lifecycleScope.launch {
+            val apiUrl = preferencesManager.getApiUrl().first()
+            val apiKey = preferencesManager.getApiKey().first()
+            RetrofitClient.configure(apiUrl, apiKey)
+            viewModel.loadCourses()
         }
     }
 }

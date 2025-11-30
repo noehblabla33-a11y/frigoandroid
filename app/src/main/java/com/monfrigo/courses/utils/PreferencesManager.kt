@@ -23,7 +23,8 @@ class PreferencesManager(private val context: Context) {
         private val API_KEY_KEY = stringPreferencesKey("api_key")
 
         // Valeurs par défaut
-        private const val DEFAULT_URL = "http://192.168.1.100:5000/api/v1/"
+        // 10.0.2.2 est l'adresse spéciale pour accéder à localhost depuis l'émulateur Android
+        private const val DEFAULT_URL = "http://10.0.2.2:5000/api/v1/"
         private const val DEFAULT_KEY = "votre_cle_api_secrete_a_changer"
     }
 
@@ -32,7 +33,7 @@ class PreferencesManager(private val context: Context) {
      */
     suspend fun saveApiUrl(url: String) {
         context.dataStore.edit { preferences ->
-            preferences[API_URL_KEY] = url
+            preferences[API_URL_KEY] = normalizeUrl(url)
         }
     }
 
@@ -61,5 +62,24 @@ class PreferencesManager(private val context: Context) {
         return context.dataStore.data.map { preferences ->
             preferences[API_KEY_KEY] ?: DEFAULT_KEY
         }
+    }
+
+    /**
+     * Normalise l'URL (ajoute http:// et le slash final si nécessaire)
+     */
+    private fun normalizeUrl(url: String): String {
+        var normalized = url.trim()
+
+        // Ajouter http:// si manquant
+        if (!normalized.startsWith("http://") && !normalized.startsWith("https://")) {
+            normalized = "http://$normalized"
+        }
+
+        // Ajouter le slash final si manquant
+        if (!normalized.endsWith("/")) {
+            normalized = "$normalized/"
+        }
+
+        return normalized
     }
 }

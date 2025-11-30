@@ -1,5 +1,7 @@
 package com.monfrigo.courses.ui.adapter
 
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
@@ -7,6 +9,7 @@ import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.monfrigo.courses.data.model.CourseItem
 import com.monfrigo.courses.databinding.ItemCourseBinding
+import kotlin.math.max
 
 /**
  * Adapter pour afficher la liste de courses
@@ -34,24 +37,25 @@ class CoursesAdapter(
         private val binding: ItemCourseBinding
     ) : RecyclerView.ViewHolder(binding.root) {
 
+        private var currentItem: CourseItem? = null
+        private var isUpdating = false
+
         fun bind(item: CourseItem) {
+            currentItem = item
+
             binding.apply {
                 // Nom de l'ingrédient
                 tvIngredientNom.text = item.ingredient_nom
 
-                // Quantité nécessaire
+                // Quantité restante à acheter
                 tvQuantiteNecessaire.text = String.format(
-                    "%.2f %s nécessaire",
-                    item.quantite,
+                    "%.2f %s à acheter",
+                    item.quantite_restante,
                     item.unite
                 )
 
-                // Prix estimé
-                if (item.prix_estime > 0) {
-                    tvPrixEstime.text = String.format("≈ %.2f €", item.prix_estime)
-                } else {
-                    tvPrixEstime.text = "Prix non défini"
-                }
+                // Unité
+                tvUniteAchetee.text = item.unite
 
                 // Catégorie (badge)
                 if (!item.categorie.isNullOrEmpty()) {
@@ -61,35 +65,70 @@ class CoursesAdapter(
                     tvCategorie.visibility = android.view.View.GONE
                 }
 
-                // Checkbox acheté
+                // Quantité achetée (par défaut = quantité restante)
+                isUpdating = true
+                etQuantiteAchetee.setText(String.format("%.2f", item.quantite_achetee))
+                isUpdating = false
+
+                // Bouton moins
+                btnMoins.setOnClickListener {
+                    val current = etQuantiteAchetee.text.toString().toDoubleOrNull() ?: 0.0
+                    val nouvelle = max(0.0, current - 1.0)
+                    etQuantiteAchetee.setText(String.format("%.2f", nouvelle))
+                    onQuantityChanged(item, nouvelle)
+                }
+
+                // Bouton plus
+                btnPlus.setOnClickListener {
+                    val current = etQuantiteAchetee.text.toString().toDoubleOrNull() ?: 0.0
+                    val nouvelle = current + 1.0
+                    etQuantiteAchetee.setText(String.format("%.2f", nouvelle))
+                    onQuantityChanged(item, nouvelle)
+                }
+
+                // TextWatcher pour mise à jour en temps réel
+                etQuantiteAchetee.removeTextChangedListener(null)
+                etQuantiteAchetee.addTextChangedListener(object : TextWatcher {
+                    override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                    override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+
+                    override fun afterTextChanged(s: Editable?) {
+                        if (isUpdating) return
+
+                        val quantite = s.toString().toDoubleOrNull()
+                        if (quantite != null && quantite >= 0) {
+                            onQuantityChanged(item, quantite)
+                        }
+                    }
+                })
+
+                // Checkbox "Acheté"
+                checkboxAchete.setOnCheckedChangeListener(null)
                 checkboxAchete.isChecked = item.achete
                 checkboxAchete.setOnCheckedChangeListener { _, isChecked ->
-                    if (isChecked != item.achete) {
-                        onItemChecked(item)
-                    }
+                    onItemChecked(item)
+                    // Animation visuelle
+                    root.animate()
+                        .alpha(if (isChecked) 0.7f else 1.0f)
+                        .setDuration(200)
+                        .start()
                 }
-
-                // Quantité achetée
-                etQuantiteAchetee.setText(String.format("%.2f", item.quantite_achetee))
-                etQuantiteAchetee.isEnabled = item.achete
-
-                // Bouton pour valider la quantité
-                btnValiderQuantite.setOnClickListener {
-                    val quantiteStr = etQuantiteAchetee.text.toString()
-                    val quantite = quantiteStr.toDoubleOrNull()
-                    if (quantite != null && quantite > 0) {
-                        onQuantityChanged(item, quantite)
-                    }
-                }
-                btnValiderQuantite.isEnabled = item.achete
 
                 // Bouton supprimer
                 btnSupprimer.setOnClickListener {
                     onItemDelete(item)
                 }
 
-                // Style différent si acheté
+                // Style visuel selon l'état
                 root.alpha = if (item.achete) 0.7f else 1.0f
+
+                // Indicateur visuel si complété
+                if (item.isCompleted()) {
+                    tvQuantiteNecessaire.text = "✓ Complet"
+                    tvQuantiteNecessaire.setTextColor(
+                        android.graphics.Color.parseColor("#28a745")
+                    )
+                }
             }
         }
     }
