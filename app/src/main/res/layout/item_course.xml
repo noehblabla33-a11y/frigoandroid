@@ -1,160 +1,77 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- REMPLACER app/src/main/res/layout/item_course.xml par ce contenu -->
 <com.google.android.material.card.MaterialCardView
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginBottom="8dp"
+    android:layout_marginHorizontal="8dp"
+    android:layout_marginVertical="4dp"
     app:cardElevation="2dp"
     app:cardCornerRadius="8dp">
 
     <LinearLayout
+        android:id="@+id/swipeableContainer"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="12dp">
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="12dp"
+        android:background="?attr/selectableItemBackground">
 
-        <!-- En-tête compact -->
-        <LinearLayout
-            android:layout_width="match_parent"
+        <!-- Nom de l'ingrédient -->
+        <TextView
+            android:id="@+id/tvIngredientNom"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:layout_weight="1"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="@android:color/black"
+            android:maxLines="1"
+            android:ellipsize="end"
+            tools:text="Carottes" />
 
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="vertical">
-
-                <TextView
-                    android:id="@+id/tvIngredientNom"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textSize="18sp"
-                    android:textStyle="bold"
-                    android:textColor="@android:color/black"
-                    tools:text="Carottes" />
-
-                <TextView
-                    android:id="@+id/tvQuantiteNecessaire"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:textSize="14sp"
-                    android:textColor="@android:color/darker_gray"
-                    tools:text="4.00 pièce(s) à acheter" />
-
-            </LinearLayout>
-
-            <TextView
-                android:id="@+id/tvCategorie"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:background="@drawable/bg_category_badge"
-                android:paddingHorizontal="8dp"
-                android:paddingVertical="4dp"
-                android:textSize="11sp"
-                android:textColor="@android:color/white"
-                android:visibility="gone"
-                android:layout_marginEnd="8dp"
-                tools:text="Légumes"
-                tools:visibility="visible" />
-
-            <ImageButton
-                android:id="@+id/btnSupprimer"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:src="@drawable/ic_delete"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="@string/supprimer" />
-
-        </LinearLayout>
-
-        <!-- Section quantité achetée (compacte) -->
-        <LinearLayout
-            android:layout_width="match_parent"
+        <!-- Quantité achetée -->
+        <EditText
+            android:id="@+id/etQuantiteAchetee"
+            android:layout_width="60dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:gravity="center"
+            android:inputType="numberDecimal"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:background="@android:color/transparent"
+            android:textColor="@color/purple_500"
+            android:paddingVertical="4dp"
+            tools:text="2.5" />
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Acheté:"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                android:layout_marginEnd="8dp" />
+        <!-- Unité -->
+        <TextView
+            android:id="@+id/tvUnite"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:textSize="14sp"
+            android:textColor="@android:color/darker_gray"
+            tools:text="kg" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnMoins"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:minWidth="0dp"
-                android:minHeight="0dp"
-                android:padding="0dp"
-                android:text="−"
-                android:textSize="20sp"
-                android:insetTop="0dp"
-                android:insetBottom="0dp"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginHorizontal="6dp"
-                android:gravity="center"
-                android:orientation="horizontal">
-
-                <EditText
-                    android:id="@+id/etQuantiteAchetee"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:minWidth="70dp"
-                    android:maxWidth="100dp"
-                    android:gravity="center"
-                    android:inputType="numberDecimal"
-                    android:textSize="18sp"
-                    android:textStyle="bold"
-                    android:background="@android:color/transparent"
-                    tools:text="2.00" />
-
-                <TextView
-                    android:id="@+id/tvUniteAchetee"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
-                    android:textSize="14sp"
-                    android:textColor="@android:color/darker_gray"
-                    tools:text="pièce(s)" />
-
-            </LinearLayout>
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnPlus"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:minWidth="0dp"
-                android:minHeight="0dp"
-                android:padding="0dp"
-                android:text="+"
-                android:textSize="20sp"
-                android:insetTop="0dp"
-                android:insetBottom="0dp"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
-
-            <CheckBox
-                android:id="@+id/checkboxAchete"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:contentDescription="Article acheté"
-                android:buttonTint="@color/green" />
-
-        </LinearLayout>
+        <!-- Badge catégorie (optionnel) -->
+        <TextView
+            android:id="@+id/tvCategorie"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_category_badge"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="4dp"
+            android:textSize="10sp"
+            android:textColor="@android:color/white"
+            android:layout_marginStart="8dp"
+            android:visibility="gone"
+            tools:text="Légumes"
+            tools:visibility="visible" />
 
     </LinearLayout>
 

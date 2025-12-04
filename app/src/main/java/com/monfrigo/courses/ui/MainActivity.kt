@@ -8,23 +8,30 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.snackbar.Snackbar
 import com.monfrigo.courses.R
 import com.monfrigo.courses.databinding.ActivityMainBinding
 import com.monfrigo.courses.data.api.RetrofitClient
 import com.monfrigo.courses.ui.adapter.CoursesAdapter
+import com.monfrigo.courses.ui.adapter.SwipeToMarkCallback
 import com.monfrigo.courses.ui.viewmodel.CoursesViewModel
 import com.monfrigo.courses.utils.PreferencesManager
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
+/**
+ * MainActivity avec layout compact et swipe-to-dismiss
+ * REMPLACE COMPLÈTEMENT le fichier MainActivity.kt existant
+ */
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var viewModel: CoursesViewModel
     private lateinit var adapter: CoursesAdapter
     private lateinit var preferencesManager: PreferencesManager
+    private var showCompleted = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,7 +47,6 @@ class MainActivity : AppCompatActivity() {
         setupObservers()
         setupButtons()
 
-        // Configurer l'API puis charger les courses
         configureApiAndLoadCourses()
     }
 
@@ -75,20 +81,47 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupRecyclerView() {
         adapter = CoursesAdapter(
-            onItemChecked = { item ->
+            onItemSwiped = { item ->
                 viewModel.toggleItemAchete(item)
+                Snackbar.make(
+                    binding.root,
+                    "✓ ${item.ingredient_nom} marqué comme acheté",
+                    Snackbar.LENGTH_SHORT
+                ).show()
             },
             onQuantityChanged = { item, quantity ->
                 viewModel.updateQuantite(item, quantity)
-            },
-            onItemDelete = { item ->
-                showDeleteConfirmation(item)
             }
         )
 
         binding.recyclerViewCourses.apply {
             layoutManager = LinearLayoutManager(this@MainActivity)
             adapter = this@MainActivity.adapter
+
+            // Ajouter le swipe-to-dismiss
+            val swipeHandler = SwipeToMarkCallback(
+                onItemSwiped = { position ->
+                    // Récupérer l'item à partir de la liste filtrée
+                    val allItems = viewModel.items.value ?: return@SwipeToMarkCallback
+                    val filteredItems = if (showCompleted) {
+                        allItems
+                    } else {
+                        allItems.filter { !it.achete }
+                    }
+
+                    if (position < filteredItems.size) {
+                        val item = filteredItems[position]
+                        viewModel.toggleItemAchete(item)
+                        Snackbar.make(
+                            binding.root,
+                            "✓ ${item.ingredient_nom} marqué comme acheté",
+                            Snackbar.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            )
+            val itemTouchHelper = ItemTouchHelper(swipeHandler)
+            itemTouchHelper.attachToRecyclerView(this)
         }
     }
 
@@ -99,8 +132,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupButtons() {
+        // Bouton synchroniser
         binding.btnSynchroniser.setOnClickListener {
             showSyncConfirmation()
+        }
+
+        // Toggle pour afficher/masquer les articles achetés
+        binding.toggleShowCompleted.setOnCheckedChangeListener { _, isChecked ->
+            showCompleted = isChecked
+            adapter.setShowCompleted(isChecked)
+            updateCompletedCount()
         }
     }
 
@@ -109,6 +150,8 @@ class MainActivity : AppCompatActivity() {
         viewModel.items.observe(this) { items ->
             adapter.submitList(items)
             updateEmptyView(items.isEmpty())
+            updateCompletedCount()
+            updateStats(items)
         }
 
         // Observer le chargement
@@ -142,10 +185,32 @@ class MainActivity : AppCompatActivity() {
         if (isEmpty) {
             binding.recyclerViewCourses.visibility = android.view.View.GONE
             binding.emptyView.visibility = android.view.View.VISIBLE
+            binding.statsCard.visibility = android.view.View.GONE
         } else {
             binding.recyclerViewCourses.visibility = android.view.View.VISIBLE
             binding.emptyView.visibility = android.view.View.GONE
+            binding.statsCard.visibility = android.view.View.VISIBLE
         }
+    }
+
+    private fun updateCompletedCount() {
+        val items = viewModel.items.value ?: return
+        val completed = items.count { it.achete }
+        val total = items.size
+
+        binding.tvCompletedCount.text = "$completed / $total achetés"
+    }
+
+    private fun updateStats(items: List<com.monfrigo.courses.data.model.CourseItem>) {
+        val restants = items.count { !it.achete }
+        val achetes = items.count { it.achete }
+        val totalEstime = items.sumOf {
+            if (!it.achete) it.quantite_achetee * it.prix_unitaire else 0.0
+        }
+
+        binding.tvStatsRestants.text = "$restants restants"
+        binding.tvStatsAchetes.text = "$achetes achetés"
+        binding.tvStatsTotal.text = String.format("%.2f €", totalEstime)
     }
 
     private fun showSyncConfirmation() {
@@ -154,7 +219,7 @@ class MainActivity : AppCompatActivity() {
         if (itemsAchetes == 0) {
             Snackbar.make(
                 binding.root,
-                "Cochez les articles achetés avant de synchroniser",
+                "Aucun article acheté à synchroniser",
                 Snackbar.LENGTH_LONG
             ).show()
             return
@@ -165,17 +230,6 @@ class MainActivity : AppCompatActivity() {
             .setMessage("Synchroniser $itemsAchetes article(s) avec le serveur ?\n\nLe frigo sera mis à jour automatiquement.")
             .setPositiveButton("Synchroniser") { _, _ ->
                 viewModel.syncAchats()
-            }
-            .setNegativeButton("Annuler", null)
-            .show()
-    }
-
-    private fun showDeleteConfirmation(item: com.monfrigo.courses.data.model.CourseItem) {
-        AlertDialog.Builder(this)
-            .setTitle("Supprimer")
-            .setMessage("Retirer ${item.ingredient_nom} de la liste ?")
-            .setPositiveButton("Supprimer") { _, _ ->
-                viewModel.deleteItem(item)
             }
             .setNegativeButton("Annuler", null)
             .show()
