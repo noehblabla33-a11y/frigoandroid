@@ -10,6 +10,11 @@
     <string name="annuler">Annuler</string>
     <string name="enregistrer">Enregistrer</string>
 
+    <!-- Nouveau bouton -->
+    <string name="fetch_list">Récup. liste serveur</string>
+    <string name="fetch_list_confirmation">Récupérer la liste de courses depuis le serveur ?\n\nLes données locales seront remplacées.</string>
+    <string name="fetch_list_success">Liste récupérée : %1$d article(s)</string>
+
     <!-- Liste de courses -->
     <string name="quantite_achetee">Qté achetée :</string>
     <string name="empty_list">Votre liste de courses est vide</string>

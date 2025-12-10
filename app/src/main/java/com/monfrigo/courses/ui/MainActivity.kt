@@ -4,11 +4,11 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
+import android.view.View
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.snackbar.Snackbar
 import com.monfrigo.courses.R
@@ -20,10 +20,10 @@ import com.monfrigo.courses.ui.viewmodel.CoursesViewModel
 import com.monfrigo.courses.utils.PreferencesManager
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import androidx.recyclerview.widget.ItemTouchHelper
 
 /**
- * MainActivity avec layout compact et swipe-to-dismiss
- * REMPLACE COMPLÈTEMENT le fichier MainActivity.kt existant
+ * MainActivity avec support de récupération manuelle de la liste
  */
 class MainActivity : AppCompatActivity() {
 
@@ -101,20 +101,19 @@ class MainActivity : AppCompatActivity() {
             // Ajouter le swipe-to-dismiss
             val swipeHandler = SwipeToMarkCallback(
                 onItemSwiped = { position ->
-                    // Récupérer l'item à partir de la liste filtrée
-                    val allItems = viewModel.items.value ?: return@SwipeToMarkCallback
-                    val filteredItems = if (showCompleted) {
+                    val allItems = viewModel.items.value ?: emptyList()
+                    val displayedItems = if (showCompleted) {
                         allItems
                     } else {
                         allItems.filter { !it.achete }
                     }
 
-                    if (position < filteredItems.size) {
-                        val item = filteredItems[position]
+                    if (position in displayedItems.indices) {
+                        val item = displayedItems[position]
                         viewModel.toggleItemAchete(item)
                         Snackbar.make(
                             binding.root,
-                            "✓ ${item.ingredient_nom} marqué comme acheté",
+                            "✓ ${item.ingredient_nom}",
                             Snackbar.LENGTH_SHORT
                         ).show()
                     }
@@ -131,89 +130,99 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupButtons() {
-        // Bouton synchroniser
-        binding.btnSynchroniser.setOnClickListener {
-            showSyncConfirmation()
-        }
-
-        // Toggle pour afficher/masquer les articles achetés
-        binding.toggleShowCompleted.setOnCheckedChangeListener { _, isChecked ->
-            showCompleted = isChecked
-            adapter.setShowCompleted(isChecked)
-            updateCompletedCount()
-        }
-    }
-
     private fun setupObservers() {
-        // Observer les items
+        // Observer la liste d'items
         viewModel.items.observe(this) { items ->
-            adapter.submitList(items)
-            updateEmptyView(items.isEmpty())
-            updateCompletedCount()
-            updateStats(items)
+            val displayedItems = if (showCompleted) {
+                items
+            } else {
+                items.filter { !it.achete }
+            }
+
+            adapter.submitList(displayedItems)
+
+            // Afficher/masquer la vue vide
+            binding.emptyView.visibility = if (displayedItems.isEmpty()) {
+                View.VISIBLE
+            } else {
+                View.GONE
+            }
         }
 
         // Observer le chargement
         viewModel.isLoading.observe(this) { isLoading ->
             binding.swipeRefresh.isRefreshing = isLoading
-            binding.btnSynchroniser.isEnabled = !isLoading
+            binding.btnFetchList.isEnabled = !isLoading
+            binding.btnSync.isEnabled = !isLoading
         }
 
         // Observer les erreurs
         viewModel.error.observe(this) { error ->
             error?.let {
                 Snackbar.make(binding.root, it, Snackbar.LENGTH_LONG)
-                    .setAction("Réessayer") {
-                        viewModel.loadCourses()
+                    .setAction("OK") {
+                        viewModel.clearError()
                     }
                     .show()
-                viewModel.clearError()
             }
         }
 
-        // Observer les succès
+        // Observer les messages de succès
         viewModel.successMessage.observe(this) { message ->
             message?.let {
-                Snackbar.make(binding.root, it, Snackbar.LENGTH_LONG).show()
+                Snackbar.make(binding.root, it, Snackbar.LENGTH_SHORT).show()
                 viewModel.clearSuccessMessage()
             }
         }
-    }
 
-    private fun updateEmptyView(isEmpty: Boolean) {
-        if (isEmpty) {
-            binding.recyclerViewCourses.visibility = android.view.View.GONE
-            binding.emptyView.visibility = android.view.View.VISIBLE
-            binding.statsCard.visibility = android.view.View.GONE
-        } else {
-            binding.recyclerViewCourses.visibility = android.view.View.VISIBLE
-            binding.emptyView.visibility = android.view.View.GONE
-            binding.statsCard.visibility = android.view.View.VISIBLE
+        // Observer le total estimé
+        viewModel.totalEstime.observe(this) { total ->
+            binding.tvTotalEstime.text = String.format("%.2f €", total)
+        }
+
+        // Observer les compteurs
+        viewModel.itemsAchetes.observe(this) { count ->
+            binding.tvStatsAchetes.text = "$count achetés"
+        }
+
+        viewModel.itemsRestants.observe(this) { count ->
+            binding.tvStatsRestants.text = "$count restants"
         }
     }
 
-    private fun updateCompletedCount() {
-        val items = viewModel.items.value ?: return
-        val completed = items.count { it.achete }
-        val total = items.size
-
-        binding.tvCompletedCount.text = "$completed / $total achetés"
-    }
-
-    private fun updateStats(items: List<com.monfrigo.courses.data.model.CourseItem>) {
-        val restants = items.count { !it.achete }
-        val achetes = items.count { it.achete }
-        val totalEstime = items.sumOf {
-            if (!it.achete) it.quantite_achetee * it.prix_unitaire else 0.0
+    private fun setupButtons() {
+        // Bouton de récupération de la liste
+        binding.btnFetchList.setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle("Récupérer la liste")
+                .setMessage("Récupérer la liste de courses depuis le serveur ?\n\nLes données locales seront remplacées.")
+                .setPositiveButton("Récupérer") { _, _ ->
+                    viewModel.fetchListFromServer()
+                }
+                .setNegativeButton("Annuler", null)
+                .show()
         }
 
-        binding.tvStatsRestants.text = "$restants restants"
-        binding.tvStatsAchetes.text = "$achetes achetés"
-        binding.tvStatsTotal.text = String.format("%.2f €", totalEstime)
+        // Bouton de synchronisation
+        binding.btnSync.setOnClickListener {
+            syncCourses()
+        }
+
+        // Toggle pour afficher/masquer les items achetés
+        binding.toggleShowCompleted.setOnCheckedChangeListener { _, isChecked ->
+            showCompleted = isChecked
+            // Rafraîchir l'affichage
+            val items = viewModel.items.value ?: emptyList()
+            val displayedItems = if (showCompleted) {
+                items
+            } else {
+                items.filter { !it.achete }
+            }
+            adapter.submitList(displayedItems)
+        }
     }
 
-    private fun showSyncConfirmation() {
+    private fun syncCourses() {
         val itemsAchetes = viewModel.items.value?.count { it.achete } ?: 0
 
         if (itemsAchetes == 0) {
@@ -260,7 +269,6 @@ class MainActivity : AppCompatActivity() {
             val apiUrl = preferencesManager.getApiUrl().first()
             val apiKey = preferencesManager.getApiKey().first()
             RetrofitClient.configure(apiUrl, apiKey)
-            viewModel.loadCourses()
         }
     }
 }

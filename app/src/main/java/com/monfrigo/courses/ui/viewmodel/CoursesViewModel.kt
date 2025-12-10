@@ -1,21 +1,30 @@
 package com.monfrigo.courses.ui.viewmodel
 
+import android.app.Application
 import android.util.Log
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.monfrigo.courses.data.local.CoursesDatabase
 import com.monfrigo.courses.data.model.CourseItem
 import com.monfrigo.courses.data.repository.CoursesRepository
 import kotlinx.coroutines.launch
 
 /**
  * ViewModel pour gérer l'état de la liste de courses
+ * Version avec cache local persistant via Room
+ *
+ * Les données sont stockées localement et persistent entre les sessions
+ * jusqu'à la prochaine synchronisation des achats
  */
-class CoursesViewModel : ViewModel() {
+class CoursesViewModel(application: Application) : AndroidViewModel(application) {
 
     private val TAG = "CoursesViewModel"
-    private val repository = CoursesRepository()
+
+    // Initialiser la base de données et le repository
+    private val database = CoursesDatabase.getDatabase(application)
+    private val repository = CoursesRepository(database.courseDao())
 
     // Liste des items
     private val _items = MutableLiveData<List<CourseItem>>()
@@ -41,8 +50,59 @@ class CoursesViewModel : ViewModel() {
     private val _itemsAchetes = MutableLiveData<Int>()
     val itemsAchetes: LiveData<Int> = _itemsAchetes
 
+    private val _itemsRestants = MutableLiveData<Int>()
+    val itemsRestants: LiveData<Int> = _itemsRestants
+
+    // Indicateur de données en cache
+    private val _hasLocalData = MutableLiveData<Boolean>()
+    val hasLocalData: LiveData<Boolean> = _hasLocalData
+
+    init {
+        // Au démarrage, charger depuis le cache local s'il existe
+        checkLocalData()
+    }
+
     /**
-     * Charge la liste de courses depuis l'API
+     * Vérifie si des données existent en cache local
+     */
+    private fun checkLocalData() {
+        viewModelScope.launch {
+            val hasData = repository.hasCachedData()
+            _hasLocalData.value = hasData
+
+            if (hasData) {
+                Log.d(TAG, "Données trouvées en cache local, chargement...")
+                loadFromCache()
+            }
+        }
+    }
+
+    /**
+     * Charge les données depuis le cache local
+     */
+    private fun loadFromCache() {
+        viewModelScope.launch {
+            _isLoading.value = true
+
+            repository.getCoursesFromCacheSync()
+                .onSuccess { response ->
+                    Log.d(TAG, "Courses chargées depuis cache: ${response.count} items")
+                    _items.value = response.items
+                    _totalEstime.value = response.total_estime
+                    updateCounters()
+                }
+                .onFailure { exception ->
+                    Log.e(TAG, "Erreur lecture cache: ${exception.message}", exception)
+                    _error.value = "Erreur de chargement du cache local"
+                }
+
+            _isLoading.value = false
+        }
+    }
+
+    /**
+     * Charge la liste de courses (depuis cache ou API selon disponibilité)
+     * Stratégie : cache d'abord, puis synchronisation en arrière-plan
      */
     fun loadCourses() {
         viewModelScope.launch {
@@ -54,11 +114,18 @@ class CoursesViewModel : ViewModel() {
                     Log.d(TAG, "Courses chargées: ${response.count} items")
                     _items.value = response.items
                     _totalEstime.value = response.total_estime
+                    _hasLocalData.value = true
                     updateCounters()
                 }
                 .onFailure { exception ->
                     Log.e(TAG, "Erreur de chargement: ${exception.message}", exception)
                     _error.value = exception.message ?: "Erreur de chargement"
+
+                    // En cas d'erreur réseau, essayer de charger depuis le cache
+                    if (repository.hasCachedData()) {
+                        Log.d(TAG, "Chargement depuis cache après échec réseau")
+                        loadFromCache()
+                    }
                 }
 
             _isLoading.value = false
@@ -66,7 +133,82 @@ class CoursesViewModel : ViewModel() {
     }
 
     /**
+     * Récupère manuellement la liste depuis l'API (pour le bouton)
+     * Force le téléchargement depuis le serveur et écrase le cache local
+     */
+    fun fetchListFromServer() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _error.value = null
+
+            repository.fetchCoursesFromServer()
+                .onSuccess { response ->
+                    Log.d(TAG, "Liste récupérée du serveur: ${response.count} items")
+                    _items.value = response.items
+                    _totalEstime.value = response.total_estime
+                    _hasLocalData.value = true
+                    updateCounters()
+                    _successMessage.value = "✓ Liste récupérée : ${response.count} article(s)"
+                }
+                .onFailure { exception ->
+                    Log.e(TAG, "Erreur de récupération: ${exception.message}", exception)
+                    _error.value = "Impossible de récupérer la liste : ${exception.message}"
+                }
+
+            _isLoading.value = false
+        }
+    }
+
+    /**
+     * Marque un item comme acheté ou non
+     * Met à jour le cache local immédiatement
+     */
+    fun toggleItemAchete(item: CourseItem) {
+        viewModelScope.launch {
+            val updatedItems = _items.value?.map {
+                if (it.id == item.id) {
+                    it.copy(achete = !it.achete)
+                } else {
+                    it
+                }
+            }
+
+            _items.value = updatedItems ?: emptyList()
+            updateCounters()
+
+            // Mettre à jour le cache local
+            updatedItems?.find { it.id == item.id }?.let { updatedItem ->
+                repository.updateCourseLocally(updatedItem)
+            }
+        }
+    }
+
+    /**
+     * Met à jour la quantité achetée d'un item
+     * Met à jour le cache local immédiatement
+     */
+    fun updateQuantite(item: CourseItem, quantite: Double) {
+        viewModelScope.launch {
+            val updatedItems = _items.value?.map {
+                if (it.id == item.id) {
+                    it.copy(quantite_achetee = quantite)
+                } else {
+                    it
+                }
+            }
+
+            _items.value = updatedItems ?: emptyList()
+
+            // Mettre à jour le cache local
+            updatedItems?.find { it.id == item.id }?.let { updatedItem ->
+                repository.updateCourseLocally(updatedItem)
+            }
+        }
+    }
+
+    /**
      * Synchronise les achats avec le serveur
+     * Supprime les items synchronisés du cache local
      */
     fun syncAchats() {
         viewModelScope.launch {
@@ -76,78 +218,29 @@ class CoursesViewModel : ViewModel() {
             val itemsAchetes = _items.value?.filter { it.achete } ?: emptyList()
 
             if (itemsAchetes.isEmpty()) {
-                _error.value = "Aucun article à synchroniser"
+                _error.value = "Aucun article acheté à synchroniser"
                 _isLoading.value = false
                 return@launch
             }
 
-            Log.d(TAG, "Synchronisation de ${itemsAchetes.size} articles")
-
             repository.syncCourses(itemsAchetes)
                 .onSuccess { response ->
-                    Log.d(TAG, "Sync réussie: ${response.message}")
-                    _successMessage.value = response.message
+                    Log.d(TAG, "Synchronisation réussie: ${response.message}")
+                    _successMessage.value = "✓ ${response.items_modifies} article(s) synchronisé(s)"
 
-                    // Recharger la liste après synchro pour avoir l'état à jour
-                    loadCourses()
+                    // Retirer les items synchronisés de la liste locale
+                    val remainingItems = _items.value?.filterNot { it.achete } ?: emptyList()
+                    _items.value = remainingItems
+                    updateCounters()
+
+                    // Le cache local a déjà été mis à jour par le repository
                 }
                 .onFailure { exception ->
-                    Log.e(TAG, "Erreur de sync: ${exception.message}", exception)
-                    _error.value = exception.message ?: "Erreur de synchronisation"
+                    Log.e(TAG, "Erreur de synchronisation: ${exception.message}", exception)
+                    _error.value = "Erreur de synchronisation : ${exception.message}"
                 }
 
             _isLoading.value = false
-        }
-    }
-
-    /**
-     * Marque un item comme acheté/non acheté
-     */
-    fun toggleItemAchete(item: CourseItem) {
-        val currentList = _items.value?.toMutableList() ?: return
-        val index = currentList.indexOfFirst { it.id == item.id }
-
-        if (index != -1) {
-            val newAcheteState = !item.achete
-
-            // Si on coche, mettre quantite_achetee = quantite_restante par défaut
-            val newItem = if (newAcheteState) {
-                item.copy(
-                    achete = true,
-                    quantite_achetee = item.quantite_restante
-                )
-            } else {
-                // Si on décoche, remettre à l'état initial
-                item.copy(
-                    achete = false,
-                    quantite_achetee = item.quantite_restante
-                )
-            }
-
-            currentList[index] = newItem
-
-            Log.d(TAG, "Item ${item.ingredient_nom} acheté: $newAcheteState")
-            _items.value = currentList
-            updateCounters()
-        }
-    }
-
-    /**
-     * Met à jour la quantité achetée ET calcule la quantité restante
-     */
-    fun updateQuantite(item: CourseItem, nouvelleQuantite: Double) {
-        val currentList = _items.value?.toMutableList() ?: return
-        val index = currentList.indexOfFirst { it.id == item.id }
-
-        if (index != -1) {
-            // Limiter la quantité achetée à la quantité restante
-            val quantiteLimitee = nouvelleQuantite.coerceAtMost(item.quantite_restante)
-
-            currentList[index] = item.copy(quantite_achetee = quantiteLimitee)
-
-            Log.d(TAG, "Quantité de ${item.ingredient_nom} mise à jour: $quantiteLimitee (restante: ${item.quantite_restante})")
-            _items.value = currentList
-            updateTotalEstime()
         }
     }
 
@@ -156,64 +249,60 @@ class CoursesViewModel : ViewModel() {
      */
     fun deleteItem(item: CourseItem) {
         viewModelScope.launch {
-            Log.d(TAG, "Suppression de l'item ${item.ingredient_nom}")
+            _isLoading.value = true
+            _error.value = null
 
             repository.deleteItem(item.id)
                 .onSuccess {
-                    val currentList = _items.value?.toMutableList() ?: return@launch
-                    currentList.removeIf { it.id == item.id }
-                    _items.value = currentList
-                    _successMessage.value = "${item.ingredient_nom} retiré de la liste"
+                    Log.d(TAG, "Item supprimé: ${item.ingredient_nom}")
+                    val updatedItems = _items.value?.filterNot { it.id == item.id } ?: emptyList()
+                    _items.value = updatedItems
                     updateCounters()
-                    updateTotalEstime()
+                    _successMessage.value = "✓ ${item.ingredient_nom} retiré de la liste"
                 }
                 .onFailure { exception ->
                     Log.e(TAG, "Erreur de suppression: ${exception.message}", exception)
-                    _error.value = exception.message ?: "Erreur de suppression"
+                    _error.value = "Erreur de suppression : ${exception.message}"
                 }
+
+            _isLoading.value = false
         }
     }
 
     /**
-     * Met à jour les compteurs
+     * Vide le cache local
+     * Utile en cas de déconnexion ou de reset
      */
-    private fun updateCounters() {
-        val list = _items.value ?: emptyList()
-        _itemsAchetes.value = list.count { it.achete }
-        Log.d(TAG, "Compteurs mis à jour: ${_itemsAchetes.value} / ${list.size}")
+    fun clearLocalData() {
+        viewModelScope.launch {
+            repository.clearCache()
+            _items.value = emptyList()
+            _hasLocalData.value = false
+            updateCounters()
+            _successMessage.value = "Cache local vidé"
+        }
     }
 
     /**
-     * Recalcule le total estimé basé sur les quantités restantes
-     */
-    private fun updateTotalEstime() {
-        val list = _items.value ?: emptyList()
-        val total = list.sumOf { it.quantite_restante * it.prix_unitaire }
-        _totalEstime.value = total
-        Log.d(TAG, "Total estimé: $total €")
-    }
-
-    /**
-     * Efface le message d'erreur
-     */
-    fun clearError() {
-        _error.value = null
-    }
-
-    /**
-     * Efface le message de succès
+     * Réinitialise le message de succès
      */
     fun clearSuccessMessage() {
         _successMessage.value = null
     }
 
     /**
-     * Calcule le total des items achetés
+     * Réinitialise le message d'erreur
      */
-    fun getTotalAchete(): Double {
-        return _items.value
-            ?.filter { it.achete }
-            ?.sumOf { it.quantite_achetee * it.prix_unitaire }
-            ?: 0.0
+    fun clearError() {
+        _error.value = null
+    }
+
+    /**
+     * Met à jour les compteurs
+     */
+    private fun updateCounters() {
+        val items = _items.value ?: emptyList()
+        _itemsAchetes.value = items.count { it.achete }
+        _itemsRestants.value = items.count { !it.achete }
     }
 }

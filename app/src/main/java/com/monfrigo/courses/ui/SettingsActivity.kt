@@ -6,16 +6,26 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
 import com.monfrigo.courses.R
 import com.monfrigo.courses.data.api.RetrofitClient
+import com.monfrigo.courses.data.local.CoursesDatabase
 import com.monfrigo.courses.data.repository.CoursesRepository
 import com.monfrigo.courses.databinding.ActivitySettingsBinding
 import com.monfrigo.courses.utils.PreferencesManager
 import kotlinx.coroutines.launch
 
+/**
+ * Activity pour configurer les paramètres de l'application
+ * Permet de configurer l'URL de l'API et la clé API
+ */
 class SettingsActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivitySettingsBinding
     private lateinit var preferencesManager: PreferencesManager
-    private val repository = CoursesRepository()
+
+    // 🆕 Initialiser le repository avec le DAO
+    private val repository by lazy {
+        val database = CoursesDatabase.getDatabase(applicationContext)
+        CoursesRepository(database.courseDao())
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,6 +46,9 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Charge les paramètres sauvegardés
+     */
     private fun loadSettings() {
         lifecycleScope.launch {
             preferencesManager.getApiUrl().collect { url ->
@@ -62,6 +75,9 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Teste la connexion à l'API avec les paramètres actuels
+     */
     private fun testConnection() {
         val url = binding.etApiUrl.text.toString().trim()
         val key = binding.etApiKey.text.toString().trim()
@@ -75,7 +91,7 @@ class SettingsActivity : AppCompatActivity() {
             return
         }
 
-        // Configurer temporairement le client
+        // Configurer temporairement le client pour le test
         RetrofitClient.configure(url, key)
 
         binding.btnTesterConnexion.isEnabled = false
@@ -107,6 +123,9 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Sauvegarde les paramètres
+     */
     private fun saveSettings() {
         val url = binding.etApiUrl.text.toString().trim()
         val key = binding.etApiKey.text.toString().trim()
@@ -124,15 +143,16 @@ class SettingsActivity : AppCompatActivity() {
             preferencesManager.saveApiUrl(url)
             preferencesManager.saveApiKey(key)
 
-            // Reconfigurer le client
+            // Reconfigurer le client avec les nouveaux paramètres
             RetrofitClient.configure(url, key)
 
             Snackbar.make(
                 binding.root,
-                "Paramètres enregistrés",
+                "✓ Paramètres enregistrés",
                 Snackbar.LENGTH_SHORT
             ).show()
 
+            // Fermer l'activité après sauvegarde
             finish()
         }
     }
