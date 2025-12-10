@@ -9,6 +9,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.snackbar.Snackbar
 import com.monfrigo.courses.R
@@ -20,10 +21,9 @@ import com.monfrigo.courses.ui.viewmodel.CoursesViewModel
 import com.monfrigo.courses.utils.PreferencesManager
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import androidx.recyclerview.widget.ItemTouchHelper
 
 /**
- * MainActivity avec support de récupération manuelle de la liste
+ * MainActivity - Version qui correspond au layout Git actuel
  */
 class MainActivity : AppCompatActivity() {
 
@@ -76,18 +76,22 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupViewModel() {
-        viewModel = ViewModelProvider(this)[CoursesViewModel::class.java]
+        viewModel = ViewModelProvider(
+            this,
+            ViewModelProvider.AndroidViewModelFactory.getInstance(application)
+        )[CoursesViewModel::class.java]
     }
 
     private fun setupRecyclerView() {
         adapter = CoursesAdapter(
             onItemSwiped = { item ->
                 viewModel.toggleItemAchete(item)
-                Snackbar.make(
-                    binding.root,
-                    "✓ ${item.ingredient_nom} marqué comme acheté",
-                    Snackbar.LENGTH_SHORT
-                ).show()
+                val message = if (item.achete) {
+                    "✓ ${item.ingredient_nom} retiré des achats"
+                } else {
+                    "✓ ${item.ingredient_nom} marqué comme acheté"
+                }
+                Snackbar.make(binding.root, message, Snackbar.LENGTH_SHORT).show()
             },
             onQuantityChanged = { item, quantity ->
                 viewModel.updateQuantite(item, quantity)
@@ -99,26 +103,17 @@ class MainActivity : AppCompatActivity() {
             adapter = this@MainActivity.adapter
 
             // Ajouter le swipe-to-dismiss
-            val swipeHandler = SwipeToMarkCallback(
-                onItemSwiped = { position ->
-                    val allItems = viewModel.items.value ?: emptyList()
-                    val displayedItems = if (showCompleted) {
-                        allItems
-                    } else {
-                        allItems.filter { !it.achete }
-                    }
-
-                    if (position in displayedItems.indices) {
-                        val item = displayedItems[position]
-                        viewModel.toggleItemAchete(item)
-                        Snackbar.make(
-                            binding.root,
-                            "✓ ${item.ingredient_nom}",
-                            Snackbar.LENGTH_SHORT
-                        ).show()
-                    }
+            val swipeHandler = SwipeToMarkCallback { position ->
+                val item = this@MainActivity.adapter.getItemAt(position)
+                if (item != null) {
+                    viewModel.toggleItemAchete(item)
+                    Snackbar.make(
+                        binding.root,
+                        "✓ ${item.ingredient_nom}",
+                        Snackbar.LENGTH_SHORT
+                    ).show()
                 }
-            )
+            }
             val itemTouchHelper = ItemTouchHelper(swipeHandler)
             itemTouchHelper.attachToRecyclerView(this)
         }
@@ -133,20 +128,9 @@ class MainActivity : AppCompatActivity() {
     private fun setupObservers() {
         // Observer la liste d'items
         viewModel.items.observe(this) { items ->
-            val displayedItems = if (showCompleted) {
-                items
-            } else {
-                items.filter { !it.achete }
-            }
-
-            adapter.submitList(displayedItems)
-
-            // Afficher/masquer la vue vide
-            binding.emptyView.visibility = if (displayedItems.isEmpty()) {
-                View.VISIBLE
-            } else {
-                View.GONE
-            }
+            adapter.submitList(items)
+            updateEmptyView(items.isEmpty())
+            updateStats(items)
         }
 
         // Observer le chargement
@@ -160,10 +144,11 @@ class MainActivity : AppCompatActivity() {
         viewModel.error.observe(this) { error ->
             error?.let {
                 Snackbar.make(binding.root, it, Snackbar.LENGTH_LONG)
-                    .setAction("OK") {
-                        viewModel.clearError()
+                    .setAction("Réessayer") {
+                        viewModel.loadCourses()
                     }
                     .show()
+                viewModel.clearError()
             }
         }
 
@@ -173,20 +158,6 @@ class MainActivity : AppCompatActivity() {
                 Snackbar.make(binding.root, it, Snackbar.LENGTH_SHORT).show()
                 viewModel.clearSuccessMessage()
             }
-        }
-
-        // Observer le total estimé
-        viewModel.totalEstime.observe(this) { total ->
-            binding.tvTotalEstime.text = String.format("%.2f €", total)
-        }
-
-        // Observer les compteurs
-        viewModel.itemsAchetes.observe(this) { count ->
-            binding.tvStatsAchetes.text = "$count achetés"
-        }
-
-        viewModel.itemsRestants.observe(this) { count ->
-            binding.tvStatsRestants.text = "$count restants"
         }
     }
 
@@ -211,14 +182,17 @@ class MainActivity : AppCompatActivity() {
         // Toggle pour afficher/masquer les items achetés
         binding.toggleShowCompleted.setOnCheckedChangeListener { _, isChecked ->
             showCompleted = isChecked
-            // Rafraîchir l'affichage
-            val items = viewModel.items.value ?: emptyList()
-            val displayedItems = if (showCompleted) {
-                items
-            } else {
-                items.filter { !it.achete }
+
+            try {
+                adapter.setShowCompleted(isChecked)
+            } catch (e: Exception) {
+                binding.toggleShowCompleted.isChecked = !isChecked
+                Snackbar.make(
+                    binding.root,
+                    "Erreur lors du changement d'affichage",
+                    Snackbar.LENGTH_SHORT
+                ).show()
             }
-            adapter.submitList(displayedItems)
         }
     }
 
@@ -242,6 +216,31 @@ class MainActivity : AppCompatActivity() {
             }
             .setNegativeButton("Annuler", null)
             .show()
+    }
+
+    private fun updateEmptyView(isEmpty: Boolean) {
+        if (isEmpty) {
+            binding.recyclerViewCourses.visibility = View.GONE
+            binding.emptyView.visibility = View.VISIBLE
+            binding.statsCard.visibility = View.GONE
+        } else {
+            binding.recyclerViewCourses.visibility = View.VISIBLE
+            binding.emptyView.visibility = View.GONE
+            binding.statsCard.visibility = View.VISIBLE
+        }
+    }
+
+    private fun updateStats(items: List<com.monfrigo.courses.data.model.CourseItem>) {
+        val restants = items.count { !it.achete }
+        val achetes = items.count { it.achete }
+        val totalEstime = items.filter { !it.achete }.sumOf {
+            it.quantite_achetee * it.prix_unitaire
+        }
+
+        // Mettre à jour les statistiques
+        binding.tvStatsRestants.text = "$restants restants"
+        binding.tvStatsAchetes.text = "$achetes achetés"
+        binding.tvTotalEstime.text = String.format("%.2f €", totalEstime)
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {

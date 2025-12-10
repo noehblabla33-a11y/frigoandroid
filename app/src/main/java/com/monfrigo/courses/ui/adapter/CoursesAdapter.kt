@@ -12,8 +12,8 @@ import com.monfrigo.courses.data.model.CourseItem
 import com.monfrigo.courses.databinding.ItemCourseBinding
 
 /**
- * Adapter compact pour afficher la liste de courses avec swipe-to-dismiss
- * REMPLACE COMPLÈTEMENT le fichier CoursesAdapter.kt existant
+ * Adapter pour afficher la liste de courses
+ * Version corrigée qui garde la liste complète en mémoire
  */
 class CoursesAdapter(
     private val onItemSwiped: (CourseItem) -> Unit,
@@ -21,7 +21,7 @@ class CoursesAdapter(
 ) : ListAdapter<CourseItem, CoursesAdapter.CourseViewHolder>(CourseDiffCallback()) {
 
     private var showCompleted = false
-    private var filteredList: List<CourseItem> = emptyList()
+    private var fullList: List<CourseItem> = emptyList()
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): CourseViewHolder {
         val binding = ItemCourseBinding.inflate(
@@ -33,43 +33,56 @@ class CoursesAdapter(
     }
 
     override fun onBindViewHolder(holder: CourseViewHolder, position: Int) {
-        holder.bind(getFilteredItem(position))
-    }
-
-    override fun getItemCount(): Int {
-        return filteredList.size
-    }
-
-    private fun getFilteredItem(position: Int): CourseItem {
-        return filteredList[position]
-    }
-
-    /**
-     * Soumet une nouvelle liste et applique le filtre
-     */
-    override fun submitList(list: List<CourseItem>?) {
-        super.submitList(list)
-        updateFilteredList(list ?: emptyList())
+        if (position >= 0 && position < currentList.size) {
+            holder.bind(getItem(position))
+        }
     }
 
     /**
      * Configure le toggle pour afficher/masquer les articles achetés
      */
     fun setShowCompleted(show: Boolean) {
-        showCompleted = show
-        updateFilteredList(currentList)
+        if (showCompleted != show) {
+            showCompleted = show
+            // Réappliquer le filtre avec la liste complète
+            applyFilter()
+        }
     }
 
     /**
-     * Met à jour la liste filtrée selon le toggle
+     * Surcharge de submitList pour sauvegarder la liste complète
      */
-    private fun updateFilteredList(list: List<CourseItem>) {
-        filteredList = if (showCompleted) {
-            list
+    override fun submitList(list: List<CourseItem>?) {
+        // Sauvegarder la liste complète
+        fullList = list ?: emptyList()
+
+        // Appliquer le filtre
+        applyFilter()
+    }
+
+    /**
+     * Applique le filtre selon l'état du toggle
+     */
+    private fun applyFilter() {
+        val filteredList = if (showCompleted) {
+            // Afficher tous les items
+            fullList
         } else {
-            list.filter { !it.achete }
+            // Filtrer pour ne garder que les items non achetés
+            fullList.filter { !it.achete }
         }
-        notifyDataSetChanged()
+        super.submitList(filteredList)
+    }
+
+    /**
+     * Récupère un item de façon sécurisée
+     */
+    fun getItemAt(position: Int): CourseItem? {
+        return if (position >= 0 && position < currentList.size) {
+            getItem(position)
+        } else {
+            null
+        }
     }
 
     inner class CourseViewHolder(
@@ -83,27 +96,37 @@ class CoursesAdapter(
             currentItem = item
 
             binding.apply {
-                // Nom de l'ingrédient
-                tvIngredientNom.text = item.ingredient_nom
+                // Nom de l'ingrédient avec indicateur si acheté
+                tvIngredientNom.text = if (item.achete) {
+                    "✓ ${item.ingredient_nom}"
+                } else {
+                    item.ingredient_nom
+                }
 
                 // Unité
                 tvUnite.text = item.unite
 
-                // Catégorie (badge)
-                if (!item.categorie.isNullOrEmpty()) {
-                    tvCategorie.text = item.categorie
-                    tvCategorie.visibility = android.view.View.VISIBLE
-                } else {
-                    tvCategorie.visibility = android.view.View.GONE
+                // Catégorie (si présente dans le layout)
+                tvCategorie?.apply {
+                    if (!item.categorie.isNullOrEmpty()) {
+                        text = item.categorie
+                        visibility = android.view.View.VISIBLE
+                    } else {
+                        visibility = android.view.View.GONE
+                    }
                 }
 
                 // Quantité achetée
                 isUpdating = true
-                etQuantiteAchetee.setText(String.format("%.1f", item.quantite_achetee))
+                val quantiteText = if (item.quantite_achetee % 1.0 == 0.0) {
+                    item.quantite_achetee.toInt().toString()
+                } else {
+                    String.format("%.1f", item.quantite_achetee)
+                }
+                etQuantiteAchetee.setText(quantiteText)
                 isUpdating = false
 
-                // TextWatcher pour mise à jour en temps réel
-                etQuantiteAchetee.removeTextChangedListener(null)
+                // TextWatcher pour mise à jour
                 etQuantiteAchetee.addTextChangedListener(object : TextWatcher {
                     override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
                     override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
@@ -112,8 +135,8 @@ class CoursesAdapter(
                         if (isUpdating) return
 
                         val quantite = s.toString().toDoubleOrNull()
-                        if (quantite != null && quantite >= 0) {
-                            onQuantityChanged(item, quantite)
+                        if (quantite != null && quantite >= 0 && currentItem != null) {
+                            onQuantityChanged(currentItem!!, quantite)
                         }
                     }
                 })
@@ -121,31 +144,25 @@ class CoursesAdapter(
                 // Style visuel selon l'état (acheté ou non)
                 root.alpha = if (item.achete) 0.6f else 1.0f
 
-                // Couleur de fond différente si acheté
-                if (item.achete) {
-                    root.setCardBackgroundColor(
-                        android.graphics.Color.parseColor("#e8f5e9")
-                    )
-                } else {
-                    root.setCardBackgroundColor(
-                        android.graphics.Color.WHITE
-                    )
+                // Click sur la carte pour toggle
+                root.setOnClickListener {
+                    currentItem?.let { onItemSwiped(it) }
                 }
             }
         }
     }
+}
 
-    /**
-     * DiffUtil callback pour optimiser les mises à jour
-     */
-    class CourseDiffCallback : DiffUtil.ItemCallback<CourseItem>() {
-        override fun areItemsTheSame(oldItem: CourseItem, newItem: CourseItem): Boolean {
-            return oldItem.id == newItem.id
-        }
+/**
+ * DiffUtil callback pour optimiser les mises à jour
+ */
+class CourseDiffCallback : DiffUtil.ItemCallback<CourseItem>() {
+    override fun areItemsTheSame(oldItem: CourseItem, newItem: CourseItem): Boolean {
+        return oldItem.id == newItem.id
+    }
 
-        override fun areContentsTheSame(oldItem: CourseItem, newItem: CourseItem): Boolean {
-            return oldItem == newItem
-        }
+    override fun areContentsTheSame(oldItem: CourseItem, newItem: CourseItem): Boolean {
+        return oldItem == newItem
     }
 }
 
@@ -166,7 +183,9 @@ class SwipeToMarkCallback(
 
     override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
         val position = viewHolder.adapterPosition
-        onItemSwiped(position)
+        if (position != RecyclerView.NO_POSITION) {
+            onItemSwiped(position)
+        }
     }
 
     override fun getSwipeThreshold(viewHolder: RecyclerView.ViewHolder): Float {
